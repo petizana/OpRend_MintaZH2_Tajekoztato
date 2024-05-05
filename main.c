@@ -24,16 +24,15 @@ void handler(int signumber)
 struct msg
 {
     long mtype;
-    int sicks;
-    int successfullyVaccinated;
+    char mtext [1024];
 };
 
-int send(int msgqueue, int sicks, int successfullyVaccinated)
+int send(int msgqueue)
 {
-    const struct msg msg = {5, sicks, successfullyVaccinated};
+    const struct msg msg = {5, "Igen méréseink vannak, amiket publikálni fogunk."};
     int status;
 
-    status = msgsnd(msgqueue, &msg, sizeof(int) * 2, 0);
+    status = msgsnd(msgqueue, &msg, strlen(msg.mtext)+1, 0);
     if (status < 0)
         perror("msgsnd");
     return 0;
@@ -43,26 +42,13 @@ int receive(int msgqueue)
 {
     struct msg msg;
     int status;
-    status = msgrcv(msgqueue, &msg, sizeof(int) * 2, 5, 0);
+    status = msgrcv(msgqueue, &msg, 1024, 5, 0);
 
     if (status < 0)
         perror("msgsnd");
     else
-        printf("\nSicks:%d -> SUCCESSFULLY VACCINATED:%d\n", msg.sicks, msg.successfullyVaccinated);
+        printf("\nDECLARANT SAID:%s\n",msg.mtext );
     return 0;
-}
-
-int countSickPatients(int patients)
-{
-    int count = 0;
-    srand(time(NULL));
-    for (int i = 0; i < patients; i++)
-    {
-        int r = rand() % 100 + 1;
-        if (r <= 20)
-            count++;
-    }
-    return count;
 }
 
 int main(int argc, char **argv)
@@ -71,7 +57,6 @@ int main(int argc, char **argv)
     signal(SIGTERM, handler);
     int pipefd[2];
     int pipe2fd[2];
-    int p;
 
     int msgqueue;
     key_t kulcs;
@@ -129,12 +114,15 @@ int main(int argc, char **argv)
             read(pipe2fd[0],string, 100);
             printf("\nReceived answer from expert was: %s\n", string);
             wait(NULL);
+            receive(msgqueue);
         }
         else // declarant process
         {
             printf("\nDeclarant waits 3 seconds, then send a SIGTERM %i signal\n", SIGTERM);
             sleep(3);
             kill(getppid(), SIGTERM);
+            wait(NULL);
+            send(msgqueue);
         }
     }
     else // expert process
@@ -158,3 +146,5 @@ int main(int argc, char **argv)
     }
     return 0;
 }
+
+// 2: 43 maradt
