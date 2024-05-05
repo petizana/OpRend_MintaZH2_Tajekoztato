@@ -16,6 +16,12 @@
 #include <sys/time.h>
 #include <time.h>
 
+
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+#include <sys/stat.h>
+
 void handler(int signumber)
 {
     printf("Signal with number %i has arrived\n", signumber);
@@ -24,7 +30,7 @@ void handler(int signumber)
 struct msg
 {
     long mtype;
-    char mtext [1024];
+    char mtext[1024];
 };
 
 int send(int msgqueue)
@@ -32,7 +38,7 @@ int send(int msgqueue)
     const struct msg msg = {5, "Igen méréseink vannak, amiket publikálni fogunk."};
     int status;
 
-    status = msgsnd(msgqueue, &msg, strlen(msg.mtext)+1, 0);
+    status = msgsnd(msgqueue, &msg, strlen(msg.mtext) + 1, 0);
     if (status < 0)
         perror("msgsnd");
     return 0;
@@ -47,7 +53,7 @@ int receive(int msgqueue)
     if (status < 0)
         perror("msgsnd");
     else
-        printf("\nDECLARANT SAID:%s\n",msg.mtext );
+        printf("\nDECLARANT SAID:%s\n", msg.mtext);
     return 0;
 }
 
@@ -67,7 +73,7 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-     if (pipe(pipe2fd) == -1)
+    if (pipe(pipe2fd) == -1)
     {
         perror("Hiba a pipe nyitaskor!");
         exit(EXIT_FAILURE);
@@ -82,11 +88,18 @@ int main(int argc, char **argv)
     }
 
     pid_t expert = fork();
+
     if (expert < 0)
     {
         perror("The fork calling was not succesful\n");
         exit(1);
     }
+
+    int oszt_mem_id;
+    char * data;
+    kulcs = ftok(argv[0], 1);
+    oszt_mem_id = shmget(kulcs, 500, IPC_CREAT | S_IRUSR | S_IWUSR);
+    data = shmat(oszt_mem_id, NULL, 0);
 
     if (expert > 0)
     {
@@ -103,18 +116,22 @@ int main(int argc, char **argv)
             pause();
             pause();
             // 2 signals received
-           
+
             close(pipefd[0]);
-            write(pipefd[1], "Do you have all your docs?", 28);     // this one is for expert
+            write(pipefd[1], "Do you have all your docs?", 28); // this one is for expert
             close(pipefd[1]);
             printf("\nQuestion sent to expert!\n");
             fflush(NULL);
             wait(NULL);
             close(pipe2fd[1]);
-            read(pipe2fd[0],string, 100);
+            read(pipe2fd[0], string, 100);
             printf("\nReceived answer from expert was: %s\n", string);
             wait(NULL);
             receive(msgqueue);
+            waitpid(declarant, &status, 0);
+            printf("Osztott memóriából olvasott titkos érték:%d", atoi(data));
+            shmdt(data);
+            shmctl(oszt_mem_id, IPC_RMID, NULL);
         }
         else // declarant process
         {
@@ -123,6 +140,9 @@ int main(int argc, char **argv)
             kill(getppid(), SIGTERM);
             wait(NULL);
             send(msgqueue);
+            char s[] ="444";
+            strcpy(data,s);
+            shmdt(data);
         }
     }
     else // expert process
@@ -139,12 +159,12 @@ int main(int argc, char **argv)
         close(pipefd[0]);
 
         close(pipe2fd[0]);
-        write(pipe2fd[1],"Yes",4);
+        write(pipe2fd[1], "Yes", 4);
         close(pipe2fd[1]);
         printf("\n");
-        
     }
     return 0;
 }
 
 // 2: 43 maradt
+// 3: 31 maradt
